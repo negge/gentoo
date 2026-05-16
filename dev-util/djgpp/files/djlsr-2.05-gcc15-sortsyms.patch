@@ -1,0 +1,20 @@
+Fix djasm.y's K&R forward declaration of sortsyms() under gcc 15.
+
+gcc 15 defaults to -std=gnu23 where empty parens in a function
+declaration mean "(void)", not "unspecified parameters". The existing
+prototype `void sortsyms();` then conflicts with the later definition
+and call sites that pass an int(*)(const void*, const void*).
+
+Match the prototype to the definition to compile under any C standard.
+
+--- a/src/djasm/djasm.y
++++ b/src/djasm/djasm.y
+@@ -179,7 +179,7 @@
+ void modrm(int mod, int reg, int rm);
+ void reg(int reg);
+ void addr32(int sib);
+-void sortsyms();
++void sortsyms(int (*)(void const *, void const *));
+
+ int istemp(char *symname, char which);
+ int islocal(char *symname);

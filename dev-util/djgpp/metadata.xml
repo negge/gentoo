@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+  <longdescription>
+    DJGPP cross-toolchain (binutils + gcc + DJGPP libc + host tools)
+    targeting i586-pc-msdosdjgpp, built from source via the
+    andrewwutw/build-djgpp recipe. Produces 32-bit protected-mode DOS
+    executables that run under a DPMI host such as CWSDPMI.EXE.
+  </longdescription>
+  <use>
+    <flag name="cxx">Build the C++ cross-compiler</flag>
+  </use>
+  <upstream>
+    <remote-id type="github">andrewwutw/build-djgpp</remote-id>
+  </upstream>
+</pkgmetadata>

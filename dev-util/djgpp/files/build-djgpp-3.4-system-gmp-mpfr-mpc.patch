@@ -1,0 +1,125 @@
+Use host gmp/mpfr/mpc, build gcc in parallel, drop in-ebuild djlsr fix.
+
+  - Drop $GMP_ARCHIVE / $MPFR_ARCHIVE / $MPC_ARCHIVE from ARCHIVE_LIST so
+    the download loop doesn't try to fetch them (portage's compile-phase
+    sandbox blocks network anyway).
+  - Drop the corresponding `tar` extractions.
+  - Drop the entire "Building gmp" / "Building mpfr" / "Building mpc"
+    sections. gcc's configure picks up libgmp/libmpfr/libmpc from
+    /usr/lib via its default search paths.
+  - Drop --with-gmp/--with-mpfr/--with-mpc=$BUILDDIR/tmpinst from the
+    gcc configure invocation so the system libraries are used.
+  - Fix gcc's `make`: upstream uses `${MAKE} j=4 ...` which assigns the
+    make variable `j` instead of enabling parallel jobs. Use
+    `-j$(nproc)` so gcc actually builds in parallel.
+  - Apply the ebuild-supplied djlsr-2.05-gcc15-sortsyms.patch after the
+    upstream patch-djlsr205.txt to fix a K&R prototype gcc-15 rejects
+    under its C23 default.
+  - Drop the trailing "Testing DJGPP" smoke test: it points at
+    $DJGPP_PREFIX (our staging dir) and tries to run gcc before the
+    package is installed to its final location.
+
+--- a/script/12.2.0
++++ b/script/12.2.0
+@@ -75,7 +75,6 @@
+ # download source files
+ ARCHIVE_LIST="$BINUTILS_ARCHIVE $DJCRX_ARCHIVE $DJLSR_ARCHIVE $DJDEV_ARCHIVE
+               $SED_ARCHIVE $DJCROSS_GCC_ARCHIVE $OLD_DJCROSS_GCC_ARCHIVE $GCC_ARCHIVE
+-              $GMP_ARCHIVE $MPFR_ARCHIVE $MPC_ARCHIVE
+               $AUTOCONF_ARCHIVE $AUTOMAKE_ARCHIVE"
+
+ echo "Download source files..."
+@@ -217,9 +216,6 @@
+ fi
+
+ cd $BUILDDIR
+-tar xJf ../../download/gmp-${GMP_VERSION}.tar.xz || exit 1
+-tar xJf ../../download/mpfr-${MPFR_VERSION}.tar.xz || exit 1
+-tar xzf ../../download/mpc-${MPC_VERSION}.tar.gz || exit 1
+
+ # gcc 4.8 or above unpack-gcc.sh needs to be patched for OSX
+ # patch from :
+@@ -264,38 +260,6 @@
+ # copy stubify programs
+ cp $DJGPP_PREFIX/i586-pc-msdosdjgpp/bin/stubify $BUILDDIR/tmpinst/bin
+
+-echo "Building gmp"
+-cd $BUILDDIR/gmp-*/
+-# On some systems, building gmp will fail if CFLAGS is set.
+-# Unset CFLAGS during building gmp.
+-env -u CFLAGS ./configure --enable-fat --prefix=$BUILDDIR/tmpinst --enable-static --disable-shared || exit 1
+-${MAKE} all || exit 1
+-if [ ! -z $MAKE_CHECK ]; then
+-  echo "Run ${MAKE} check"
+-  ${MAKE} check || exit 1
+-fi
+-${MAKE} install || exit 1
+-
+-echo "Building mpfr"
+-cd $BUILDDIR/mpfr-${MPFR_VERSION}/
+-./configure --prefix=$BUILDDIR/tmpinst --with-gmp=$BUILDDIR/tmpinst --enable-static --disable-shared || exit 1
+-${MAKE} all || exit 1
+-if [ ! -z $MAKE_CHECK ]; then
+-  echo "Run ${MAKE} check"
+-  ${MAKE} check || exit 1
+-fi
+-${MAKE} install || exit 1
+-
+-echo "Building mpc"
+-cd $BUILDDIR/mpc-${MPC_VERSION}/
+-./configure --prefix=$BUILDDIR/tmpinst --with-gmp=$BUILDDIR/tmpinst --with-mpfr=$BUILDDIR/tmpinst --enable-static --disable-shared || exit 1
+-${MAKE} all || exit 1
+-if [ ! -z $MAKE_CHECK ]; then
+-  echo "Run ${MAKE} check"
+-  ${MAKE} check || exit 1
+-fi
+-${MAKE} install || exit 1
+-
+ echo "Building gcc"
+ cd $BUILDDIR/
+
+@@ -313,14 +277,11 @@
+                                  --enable-lto \
+                                  --enable-libstdcxx-filesystem-ts \
+                                  --enable-libquadmath-support \
+-                                 --with-gmp=$BUILDDIR/tmpinst \
+-                                 --with-mpfr=$BUILDDIR/tmpinst \
+-                                 --with-mpc=$BUILDDIR/tmpinst \
+                                  --enable-version-specific-runtime-libs \
+                                  --enable-languages=${ENABLE_LANGUAGES} \
+                                  || exit 1
+
+-${MAKE} j=4 "PATH=$BUILDDIR/tmpinst/bin:$PATH" || exit 1
++${MAKE} -j$(nproc) "PATH=$BUILDDIR/tmpinst/bin:$PATH" || exit 1
+
+ # Workaround for MinGW. Need to fix some .deps/*.Plo files.
+ # Fix from
+@@ -359,6 +320,7 @@
+ unzip -o ../../download/djdev${DJDEV_VERSION}.zip "include/*/*" || exit 1
+ unzip -o ../../download/djdev${DJDEV_VERSION}.zip "include/*" || exit 1
+ patch -p1 -u < ../../patch/patch-djlsr205.txt || exit 1
++patch -p1 -u < ../../patch/djlsr-2.05-gcc15-sortsyms.patch || exit 1
+ if [ "$CC" == "gcc" ]; then
+   echo "Building DXE tools."
+   cd src
+@@ -377,20 +339,3 @@
+ # copy setenv script
+ (cd $BUILDDIR/../../setenv/ && ./copyfile.sh $DJGPP_PREFIX) || exit 1
+
+-echo "Testing DJGPP."
+-cd $BUILDDIR
+-cd ..
+-echo "Use DJGPP to build a test C program."
+-$DJGPP_PREFIX/bin/i586-pc-msdosdjgpp-gcc ../hello.c -o hello || exit 1
+-
+-for x in $(echo $ENABLE_LANGUAGES | tr "," " ")
+-do
+-  case $x in
+-    c++)
+-      echo "Use DJGPP to build a test C++ program."
+-      $DJGPP_PREFIX/bin/i586-pc-msdosdjgpp-c++ ../hello-cpp.cpp -o hello-cpp || exit 1
+-      ;;
+-  esac
+-done
+-
+-echo "build-djgpp.sh done."
